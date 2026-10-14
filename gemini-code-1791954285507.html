@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>루티나이저 V3 - 시각적 루틴 보드</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      background-color: #FAF7F0;
+      overflow: hidden;
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @keyframes softGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); border-color: #FBBF24; }
+      50% { box-shadow: 0 0 20px 8px rgba(251, 191, 36, 0.6); border-color: #F59E0B; }
+    }
+    .step-active {
+      animation: softGlow 2s infinite ease-in-out;
+      transform: scale(1.05);
+      z-index: 10;
+      opacity: 1 !important;
+      filter: none !important;
+      background-color: #ffffff;
+    }
+
+    .step-future {
+      opacity: 0.4;
+      filter: grayscale(80%);
+      transform: scale(0.95);
+      background-color: #ffffff;
+    }
+
+    .step-completed {
+      opacity: 0.7;
+      background-color: #E7E5E4;
+      transform: scale(0.95);
+      border-color: #D6D3D1;
+    }
+
+    @keyframes finaleGlow {
+      0% { background-color: #FAF7F0; }
+      50% { background-color: #FEF3C7; }
+      100% { background-color: #FAF7F0; }
+    }
+    .finale-mode {
+      animation: finaleGlow 3s ease-in-out forwards;
+    }
+
+    .confetti-piece {
+      position: fixed;
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 100;
+      animation: fall 3.5s ease-in forwards;
+    }
+    @keyframes fall {
+      0% { transform: translateY(-10vh) rotate(0deg) scale(1); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(360deg) scale(0.5); opacity: 0; }
+    }
+
+    .modal-backdrop {
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+  </style>
+</head>
+<body class="text-stone-800 h-screen w-screen flex flex-col antialiased relative">
+
+  <!-- HOME VIEW -->
+  <div id="homeView" class="flex flex-col h-full max-w-2xl w-full mx-auto p-4 sm:p-6 overflow-y-auto no-scrollbar">
+    <header class="flex items-center justify-between mb-6 pt-4">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-amber-200 text-2xl flex items-center justify-center shadow-sm">🌱</div>
+        <div>
+          <h1 class="text-2xl font-black text-stone-800 tracking-tight">루티나이저</h1>
+          <p class="text-xs font-semibold text-amber-700">무소음 시각 지원 보드</p>
+        </div>
+      </div>
+      <button onclick="openGatekeeper()" class="p-2.5 rounded-xl bg-white border border-stone-200 text-stone-500 hover:bg-stone-50 active:scale-95 shadow-sm transition flex items-center gap-2">
+        <span>⚙️</span>
+        <span class="text-xs font-bold hidden sm:block">부모 설정</span>
+      </button>
+    </header>
+
+    <main class="flex-1 flex flex-col gap-4" id="routineListContainer"></main>
+
+    <div class="mt-8 mb-4 text-center">
+      <p class="text-xs font-bold text-stone-400">Routinizer V3 - Sensory Friendly</p>
+    </div>
+  </div>
+
+  <!-- PLAY VIEW -->
+  <div id="playView" class="hidden flex-col h-full max-w-4xl w-full mx-auto p-4 sm:p-6 relative">
+    <header class="flex items-center justify-between mb-8">
+      <button onclick="goHome()" class="px-4 py-2 rounded-xl bg-white border border-stone-200 text-stone-600 font-bold active:scale-95 shadow-sm transition">
+        ◀ 뒤로
+      </button>
+      <h2 id="playRoutineTitle" class="text-xl font-bold text-stone-800">루틴 이름</h2>
+      <div class="w-16"></div>
+    </header>
+
+    <main class="flex-1 flex flex-col justify-center mb-8 relative">
+      <div class="absolute top-1/2 left-4 right-4 h-3 bg-stone-200 -translate-y-1/2 rounded-full z-0"></div>
+      <div id="playStepsTrain" class="relative z-10 flex flex-row overflow-x-auto snap-x snap-mandatory gap-4 pb-8 pt-4 px-2 no-scrollbar items-stretch justify-start sm:justify-center"></div>
+    </main>
+
+    <footer class="mt-auto pb-4">
+      <button onclick="triggerParentAssist()" class="w-full py-4 bg-stone-100 border-2 border-stone-200 text-stone-600 rounded-2xl font-bold text-sm sm:text-base active:scale-98 shadow-sm flex items-center justify-center gap-2 transition">
+        <span class="text-xl">🤝</span>
+        <span>아빠가 도와줄게! (마지막은 아이가 꾹)</span>
+      </button>
+    </footer>
+  </div>
+
+  <!-- EDIT VIEW -->
+  <div id="editView" class="hidden flex-col h-full max-w-2xl w-full mx-auto p-4 sm:p-6 bg-white overflow-y-auto no-scrollbar">
+    <header class="flex items-center justify-between mb-6 pt-4 border-b border-stone-100 pb-4">
+      <div>
+        <h1 class="text-2xl font-black text-stone-800">⚙️ 부모 설정</h1>
+        <p class="text-xs text-stone-500">루틴을 추가하고 수정하세요.</p>
+      </div>
+      <button onclick="closeEditView()" class="px-4 py-2 rounded-xl bg-stone-100 text-stone-600 font-bold active:scale-95 transition">
+        완료
+      </button>
+    </header>
+
+    <main class="flex-1 flex flex-col gap-4" id="editListContainer"></main>
+
+    <button onclick="openRoutineBuilder()" class="mt-6 w-full py-4 bg-amber-500 text-white rounded-2xl font-bold text-lg active:scale-98 shadow-md transition flex items-center justify-center gap-2">
+      <span>➕</span> 새 루틴 만들기
+    </button>
+  </div>
+
+  <!-- MODALS -->
+  <!-- Gatekeeper -->
+  <div id="gatekeeperModal" class="hidden fixed inset-0 z-50 bg-stone-900/40 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white max-w-sm w-full rounded-3xl p-6 shadow-2xl border border-stone-200 text-center">
+      <div class="text-4xl mb-4">🔒</div>
+      <h3 class="font-bold text-lg text-stone-800 mb-2">부모님 확인</h3>
+      <p class="text-sm text-stone-500 mb-6">아이가 설정을 바꾸지 못하도록<br>아래 수학 문제의 정답을 적어주세요.</p>
+      <div class="bg-stone-50 p-4 rounded-2xl mb-4">
+        <span id="mathQuestion" class="text-2xl font-black text-stone-700 tracking-widest"></span>
+      </div>
+      <input type="number" id="mathAnswer" placeholder="정답 입력" class="w-full p-4 rounded-xl border border-stone-300 text-center text-xl font-bold mb-4 focus:outline-amber-500 bg-white" pattern="[0-9]*" inputmode="numeric">
+      <div class="flex gap-2">
+        <button onclick="closeGatekeeper()" class="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-bold">취소</button>
+        <button onclick="checkGatekeeper()" class="flex-1 py-3 bg-stone-800 text-white rounded-xl font-bold">확인</button>
+      </div>
+      <p id="mathError" class="text-red-500 text-xs font-bold mt-3 hidden">정답이 아닙니다. 다시 시도해주세요.</p>
+    </div>
+  </div>
+
+  <!-- Routine Builder -->
+  <div id="builderModal" class="hidden fixed inset-0 z-50 bg-stone-900/40 modal-backdrop flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col">
+      <div class="p-4 border-b border-stone-100 flex items-center justify-between shrink-0">
+        <h3 class="font-bold text-lg text-stone-800" id="builderTitle">루틴 만들기</h3>
+        <button onclick="closeRoutineBuilder()" class="w-8 h-8 bg-stone-100 rounded-full font-bold text-stone-500">✕</button>
+      </div>
+      
+      <div class="p-4 overflow-y-auto flex-1 no-scrollbar space-y-5">
+        <div>
+          <label class="block text-xs font-bold text-stone-500 mb-1.5 ml-1">루틴 이름</label>
+          <input type="text" id="b_routineName" placeholder="예: 치카치카 양치하기" class="w-full p-3 rounded-xl border border-stone-300 bg-white font-bold focus:outline-amber-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-500 mb-1.5 ml-1">몇 단계로 나눌까요? (최대 5개)</label>
+          <div class="flex gap-2">
+            <button onclick="setBuilderSteps(2)" class="b-step-btn flex-1 py-2 rounded-lg font-bold border border-stone-200 text-stone-500">2</button>
+            <button onclick="setBuilderSteps(3)" class="b-step-btn flex-1 py-2 rounded-lg font-bold border border-stone-200 text-stone-500">3</button>
+            <button onclick="setBuilderSteps(4)" class="b-step-btn flex-1 py-2 rounded-lg font-bold border border-stone-200 text-stone-500">4</button>
+            <button onclick="setBuilderSteps(5)" class="b-step-btn flex-1 py-2 rounded-lg font-bold border border-stone-200 text-stone-500">5</button>
+          </div>
+        </div>
+
+        <div id="b_stepsContainer" class="space-y-3 bg-stone-50 p-3 rounded-2xl border border-stone-100">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-stone-100 shrink-0">
+        <button onclick="saveRoutine()" class="w-full py-4 bg-amber-500 text-white rounded-xl font-bold text-lg active:scale-98 shadow-sm">
+          저장하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Emoji Picker Modal -->
+  <div id="emojiModal" class="hidden fixed inset-0 z-[60] bg-stone-900/60 modal-backdrop flex items-end sm:items-center justify-center sm:p-4 transition-opacity">
+    <div class="bg-white w-full max-w-sm h-[60vh] sm:h-auto sm:max-h-[70vh] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col transform transition-transform">
+      <div class="p-4 border-b border-stone-100 flex items-center justify-between shrink-0">
+        <h3 class="font-bold text-lg text-stone-800">아이콘 선택</h3>
+        <button onclick="closeEmojiPicker()" class="w-8 h-8 bg-stone-100 rounded-full font-bold text-stone-500">✕</button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-1 no-scrollbar" id="emojiGridContainer">
+        <!-- Emojis injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Data & State ---
+    let routines = [];
+    
+    // 핵심 수정 1: Storage Key를 완전히 변경하여 기존 캐시 데이터 충돌을 원천 차단
+    const STORAGE_KEY = 'routinizer_v3_clean_data_01';
+
+    const defaultRoutines = [
+      {
+        id: 'r_1',
+        name: '양치하기 (4단계)',
+        steps: [
+          { icon: '🦷', title: '윗니 닦기' },
+          { icon: '🦷', title: '아랫니 닦기' },
+          { icon: '😁', title: '앞니 이~' },
+          { icon: '🍬', title: '자일리톨 보상' }
+        ]
+      },
+      {
+        id: 'r_2',
+        name: '밥 먹기 (2단계)',
+        steps: [
+          { icon: '🍚', title: '맘마 5번' },
+          { icon: '🍧', title: '슬러시 보상' }
+        ]
+      }
+    ];
+
+    const emojiCategories = [
+      { name: '일상 & 세면', emojis: ['🦷','🪥','🧼','🛁','🚽','🧻','🛏️','👕','👖','👟','🎒','🏫'] },
+      { name: '식사 & 간식', emojis: ['🍚','🍞','🥩','🍎','🍌','🥛','🧃','🍪','🍬','🍫','🍦','🍧','🎂'] },
+      { name: '놀이 & 활동', emojis: ['📚','🎨','⚽','🚗','🧸','🧩','📺','🏃‍♂️','🚶','👏','🙌','😴'] },
+      { name: '보상 & 감정', emojis: ['🎁','🏆','⭐','✨','🎉','👍','🥰','😀','😎','💪','❤️','💯'] }
+    ];
+
+    let currentPlayRoutine = null;
+    let currentPlayStepIndex = 0;
+    
+    let editingRoutineId = null;
+    let builderStepCount = 4;
+    let currentEmojiInputId = null; 
+
+    // --- Initialization ---
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+      renderHome();
+      renderEmojiPicker(); 
+    });
+
+    function loadData() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            routines = parsed;
+          } else {
+            routines = [...defaultRoutines];
+          }
+        } else {
+          routines = [...defaultRoutines];
+          saveData();
+        }
+      } catch(e) {
+        console.error("Data Load Error:", e);
+        routines = [...defaultRoutines];
+      }
+    }
+
+    function saveData() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(routines));
+      } catch(e) {
+        console.error("Data Save Error:", e);
+      }
+    }
+
+    function showView(viewId) {
+      document.getElementById('homeView').classList.add('hidden');
+      document.getElementById('playView').classList.add('hidden');
+      document.getElementById('playView').classList.remove('flex');
+      document.getElementById('editView').classList.add('hidden');
+      const target = document.getElementById(viewId);
+      target.classList.remove('hidden');
+      if(viewId === 'playView') target.classList.add('flex');
+    }
+
+    function goHome() {
+      document.body.classList.remove('finale-mode');
+      renderHome();
+      showView('homeView');
+    }
+
+    function renderHome() {
+      const container = document.getElementById('routineListContainer');
+      container.innerHTML = '';
+      
+      // 핵심 수정 2: 루틴이 하나도 없을 경우 빈 화면 방지 안내 문구
+      if (!routines || routines.length === 0) {
+        container.innerHTML = `
+          <div class="flex flex-col items-center justify-center p-10 text-center h-full opacity-60">
+            <div class="text-5xl mb-4">📭</div>
+            <p class="text-stone-600 font-bold mb-2">루틴이 없습니다.</p>
+            <p class="text-xs text-stone-500">우측 상단 '부모 설정'을 눌러<br>새로운 루틴을 추가해주세요.</p>
+          </div>
+        `;
+        return;
+      }
+
+      routines.forEach(r => {
+        // 안전 장치: steps 데이터가 없을 경우 스킵하여 에러 방지
+        if (!r.steps || !Array.isArray(r.steps)) return;
+
+        const btn = document.createElement('button');
+        btn.className = "w-full p-5 bg-white rounded-3xl border border-stone-200 shadow-sm active:scale-98 transition flex items-center justify-between text-left";
+        btn.onclick = () => startRoutine(r.id);
+        const icons = r.steps.map(s => s.icon).join(' ➔ ');
+        btn.innerHTML = `
+          <div>
+            <h3 class="text-lg font-bold text-stone-800">${r.name}</h3>
+            <p class="text-xs text-stone-400 mt-1">${icons}</p>
+          </div>
+          <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center font-bold">▶</div>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function startRoutine(id) {
+      currentPlayRoutine = routines.find(r => r.id === id);
+      currentPlayStepIndex = 0;
+      document.getElementById('playRoutineTitle').innerText = currentPlayRoutine.name;
+      renderPlaySteps();
+      showView('playView');
+    }
+
+    function renderPlaySteps() {
+      const container = document.getElementById('playStepsTrain');
+      container.innerHTML = '';
+      const numSteps = currentPlayRoutine.steps.length;
+      const cardWidth = numSteps > 3 ? 'min-w-[140px] sm:min-w-[180px]' : 'min-w-[160px] sm:min-w-[200px] flex-1 max-w-[260px]';
+
+      currentPlayRoutine.steps.forEach((step, index) => {
+        const isLast = (index === numSteps - 1);
+        const isActive = (index === currentPlayStepIndex);
+        const isCompleted = (index < currentPlayStepIndex);
+        const isFuture = (index > currentPlayStepIndex);
+
+        let stateClass = isActive ? 'step-active border-4 cursor-pointer' : 
+                         isCompleted ? 'step-completed border-2' : 'step-future border-2';
+        const lastHighlight = isLast ? 'ring-4 ring-amber-200' : '';
+        const badgeColor = isLast ? 'bg-amber-500 text-white' : 'bg-stone-200 text-stone-600';
+        const badgeText = isLast ? '🎁 보상' : `${index + 1}`;
+
+        const card = document.createElement('div');
+        card.className = `snap-center shrink-0 ${cardWidth} flex flex-col items-center justify-center p-6 rounded-[2rem] transition-all duration-500 relative ${stateClass} ${lastHighlight}`;
+        card.onclick = () => { if (isActive) handleStepTap(index); };
+
+        const checkOverlay = isCompleted ? `<div class="absolute inset-0 flex items-center justify-center bg-stone-200/50 rounded-[2rem]"><span class="text-5xl">✅</span></div>` : '';
+
+        card.innerHTML = `
+          ${checkOverlay}
+          <span class="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide ${badgeColor} shadow-sm whitespace-nowrap">${badgeText}</span>
+          <div class="text-6xl sm:text-7xl mt-8 mb-4 select-none drop-shadow-sm">${step.icon}</div>
+          <h3 class="text-center font-bold text-stone-800 text-base sm:text-lg leading-tight break-keep select-none">${step.title}</h3>
+        `;
+        container.appendChild(card);
+      });
+
+      if (currentPlayStepIndex < numSteps) {
+        setTimeout(() => {
+          const activeCard = container.children[currentPlayStepIndex];
+          if(activeCard) activeCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }, 50);
+      }
+    }
+
+    function handleStepTap(index) {
+      if (index !== currentPlayStepIndex) return;
+      currentPlayStepIndex++;
+      if (currentPlayStepIndex >= currentPlayRoutine.steps.length) triggerFinale();
+      else renderPlaySteps();
+    }
+
+    function triggerParentAssist() {
+      const numSteps = currentPlayRoutine.steps.length;
+      if (currentPlayStepIndex >= numSteps - 1) return; 
+      currentPlayStepIndex = numSteps - 1;
+      renderPlaySteps();
+    }
+
+    function triggerFinale() {
+      renderPlaySteps();
+      document.body.classList.add('finale-mode');
+      for(let i=0; i<50; i++) setTimeout(createConfetti, i * 40);
+      setTimeout(goHome, 5000);
+    }
+
+    function createConfetti() {
+      const colors = ['#F59E0B', '#FCD34D', '#34D399', '#60A5FA', '#F87171', '#A78BFA'];
+      const conf = document.createElement('div');
+      conf.className = 'confetti-piece';
+      conf.style.left = Math.random() * 100 + 'vw';
+      conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+      if(Math.random() > 0.5) conf.style.borderRadius = '50%';
+      document.body.appendChild(conf);
+      setTimeout(() => conf.remove(), 4000);
+    }
+
+    let mathAns = 0;
+    function openGatekeeper() {
+      const a = Math.floor(Math.random() * 9) + 1;
+      const b = Math.floor(Math.random() * 9) + 1;
+      mathAns = a + b;
+      document.getElementById('mathQuestion').innerText = `${a} + ${b} = ?`;
+      document.getElementById('mathAnswer').value = '';
+      document.getElementById('mathError').classList.add('hidden');
+      document.getElementById('gatekeeperModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('mathAnswer').focus(), 100);
+    }
+
+    function closeGatekeeper() { document.getElementById('gatekeeperModal').classList.add('hidden'); }
+
+    function checkGatekeeper() {
+      const input = parseInt(document.getElementById('mathAnswer').value, 10);
+      if (input === mathAns) {
+        closeGatekeeper();
+        renderEditView();
+        showView('editView');
+      } else {
+        document.getElementById('mathError').classList.remove('hidden');
+      }
+    }
+
+    function renderEditView() {
+      const container = document.getElementById('editListContainer');
+      container.innerHTML = '';
+      
+      if (!routines || routines.length === 0) {
+        container.innerHTML = `
+          <div class="flex flex-col items-center justify-center p-6 text-center opacity-60">
+            <p class="text-sm text-stone-500">등록된 루틴이 없습니다.</p>
+          </div>
+        `;
+      }
+
+      routines.forEach(r => {
+        const item = document.createElement('div');
+        item.className = "flex items-center justify-between p-4 bg-white border border-stone-200 rounded-2xl shadow-sm";
+        item.innerHTML = `
+          <div>
+            <h3 class="font-bold text-stone-800">${r.name}</h3>
+            <p class="text-xs text-stone-400 mt-1">${r.steps.length}단계</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="editRoutine('${r.id}')" class="px-3 py-1.5 bg-stone-100 text-stone-600 rounded-lg text-xs font-bold active:scale-95">수정</button>
+            <button onclick="deleteRoutine('${r.id}')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold active:scale-95">삭제</button>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function closeEditView() { goHome(); }
+
+    function deleteRoutine(id) {
+      if(confirm("정말 이 루틴을 삭제하시겠습니까?")) {
+        routines = routines.filter(r => r.id !== id);
+        saveData();
+        renderEditView();
+      }
+    }
+
+    function openRoutineBuilder() {
+      editingRoutineId = null;
+      document.getElementById('builderTitle').innerText = "새 루틴 만들기";
+      document.getElementById('b_routineName').value = "";
+      setBuilderSteps(2);
+      document.getElementById('builderModal').classList.remove('hidden');
+    }
+
+    function editRoutine(id) {
+      editingRoutineId = id;
+      const r = routines.find(x => x.id === id);
+      document.getElementById('builderTitle').innerText = "루틴 수정하기";
+      document.getElementById('b_routineName').value = r.name;
+      setBuilderSteps(r.steps.length, r.steps);
+      document.getElementById('builderModal').classList.remove('hidden');
+    }
+
+    function closeRoutineBuilder() { document.getElementById('builderModal').classList.add('hidden'); }
+
+    function setBuilderSteps(count, existingSteps = null) {
+      builderStepCount = count;
+      document.querySelectorAll('.b-step-btn').forEach(btn => {
+        if(parseInt(btn.innerText) === count) {
+          btn.className = "b-step-btn flex-1 py-2 rounded-lg font-bold border border-amber-400 bg-amber-50 text-amber-700";
+        } else {
+          btn.className = "b-step-btn flex-1 py-2 rounded-lg font-bold border border-stone-200 text-stone-500 bg-white";
+        }
+      });
+
+      const container = document.getElementById('b_stepsContainer');
+      container.innerHTML = '';
+
+      for(let i=0; i<count; i++) {
+        const isLast = (i === count - 1);
+        const defaultIcon = isLast ? "🎁" : "✅";
+        const defaultTitle = isLast ? "보상" : "";
+        
+        let iconVal = existingSteps && existingSteps[i] ? existingSteps[i].icon : defaultIcon;
+        let titleVal = existingSteps && existingSteps[i] ? existingSteps[i].title : defaultTitle;
+
+        const bgColor = isLast ? "bg-amber-100/50" : "bg-white";
+        const label = isLast ? "마지막 보상" : `${i+1}번째 할 일`;
+
+        const row = document.createElement('div');
+        row.className = `flex gap-2 p-2 rounded-xl border border-stone-200 ${bgColor}`;
+        row.innerHTML = `
+          <div class="flex flex-col gap-1 w-16">
+            <label class="text-[10px] font-bold text-stone-400 text-center">이모지</label>
+            <input type="text" id="b_icon_${i}" value="${iconVal}" readonly onclick="openEmojiPicker('b_icon_${i}')" 
+                   class="w-full p-2 text-center text-2xl bg-white rounded-lg border border-stone-200 cursor-pointer shadow-sm focus:border-amber-400 focus:outline-none hover:bg-stone-50 transition">
+          </div>
+          <div class="flex flex-col gap-1 flex-1">
+            <label class="text-[10px] font-bold text-stone-400">${label}</label>
+            <input type="text" id="b_title_${i}" value="${titleVal}" placeholder="할 일 이름" 
+                   class="w-full p-2 mt-1 bg-transparent border-b-2 border-stone-200 focus:border-amber-400 font-bold focus:outline-none text-sm">
+          </div>
+        `;
+        container.appendChild(row);
+      }
+    }
+
+    function saveRoutine() {
+      const name = document.getElementById('b_routineName').value.trim() || "이름 없는 루틴";
+      const steps = [];
+      for(let i=0; i<builderStepCount; i++) {
+        const icon = document.getElementById(`b_icon_${i}`).value.trim() || "✅";
+        const title = document.getElementById(`b_title_${i}`).value.trim() || `단계 ${i+1}`;
+        steps.push({ icon, title });
+      }
+      if (editingRoutineId) {
+        const idx = routines.findIndex(r => r.id === editingRoutineId);
+        if(idx !== -1) { routines[idx].name = name; routines[idx].steps = steps; }
+      } else {
+        routines.push({ id: 'r_' + Date.now(), name, steps });
+      }
+      saveData();
+      closeRoutineBuilder();
+      renderEditView();
+    }
+
+    // --- Emoji Picker Logic ---
+    function renderEmojiPicker() {
+      const container = document.getElementById('emojiGridContainer');
+      let html = '';
+      emojiCategories.forEach(cat => {
+        html += `<h4 class="text-xs font-bold text-stone-400 mb-2 mt-4 first:mt-0 px-1">${cat.name}</h4>`;
+        html += `<div class="grid grid-cols-5 sm:grid-cols-6 gap-2 mb-4 border-b border-stone-100 pb-4 last:border-0">`;
+        cat.emojis.forEach(e => {
+          html += `<button type="button" onclick="selectEmoji('${e}')" class="text-3xl p-2 hover:bg-stone-100 rounded-xl active:scale-90 transition flex items-center justify-center">${e}</button>`;
+        });
+        html += `</div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    function openEmojiPicker(inputId) {
+      currentEmojiInputId = inputId;
+      document.getElementById('emojiModal').classList.remove('hidden');
+    }
+
+    function closeEmojiPicker() {
+      document.getElementById('emojiModal').classList.add('hidden');
+      currentEmojiInputId = null;
+    }
+
+    function selectEmoji(emoji) {
+      if(currentEmojiInputId) {
+        document.getElementById(currentEmojiInputId).value = emoji;
+      }
+      closeEmojiPicker();
+    }
+  </script>
+</body>
+</html>
